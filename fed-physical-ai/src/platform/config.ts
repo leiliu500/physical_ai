@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { identifier } from './contracts.js';
+import { bedrockSettings, type BedrockSettings } from '../ai/bedrock.js';
 const https = z
   .string()
   .url()
@@ -101,6 +102,7 @@ export interface PlatformConfig {
   telemetryMaxAgeSeconds: number;
   rateLimit: number;
   logLevel: 'info' | 'error' | 'silent';
+  bedrock: BedrockSettings;
 }
 export function loadConfig(values: NodeJS.ProcessEnv = process.env): PlatformConfig {
   if (
@@ -141,5 +143,6 @@ export function loadConfig(values: NodeJS.ProcessEnv = process.env): PlatformCon
     telemetryMaxAgeSeconds: e.TELEMETRY_MAX_AGE_SECONDS,
     rateLimit: e.RATE_LIMIT_PER_MINUTE,
     logLevel: e.LOG_LEVEL,
+    bedrock: bedrockSettings(values),
   };
 }

@@ -10,6 +10,8 @@ A separate, clearly labeled simulation now powers the hosted Site with moving ro
 
 ## Production operating guarantees
 
+The **AI operations** workspace now supports server-side Amazon Bedrock planning with `openai.gpt-oss-120b-1:0`. It generates validated recommendations for explicit operator review. See [BEDROCK.md](docs/BEDROCK.md) and the [AWS Terraform deployment guide](../infra/terraform/README.md).
+
 - The production service has no generated device motion, scenario injection, local identity selection or browser execution engine. Simulation assets are emitted separately in `out/`.
 - Commands require an authenticated role, current observations, approved capabilities, idempotency keys and a released dispatch boundary.
 - Robot dispatch checks reported hardware stop, interlock, idle state and battery policy. Physical safety enforcement remains in certified local controllers.

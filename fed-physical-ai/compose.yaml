@@ -20,6 +20,9 @@ services:
       SAFETY_POLICY_JSON: ${SAFETY_POLICY_JSON:?Set the approved facility safety policy JSON}
       TELEMETRY_MAX_AGE_SECONDS: ${TELEMETRY_MAX_AGE_SECONDS:-30}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-6000}
+      BEDROCK_ENABLED: ${BEDROCK_ENABLED:-false}
+      BEDROCK_REGION: ${BEDROCK_REGION:-us-gov-west-1}
+      BEDROCK_MODEL_ID: openai.gpt-oss-120b-1:0
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]

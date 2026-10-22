@@ -5,7 +5,13 @@ const bytes = (value: string | Uint8Array): Uint8Array =>
   typeof value === 'string' ? new TextEncoder().encode(value) : value;
 const hex = (value: Uint8Array): string =>
   Array.from(value, (v) => v.toString(16).padStart(2, '0')).join('');
-export const randomUUID = (): string => globalThis.crypto.randomUUID();
+export function randomUUID(): string {
+  const value = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  value[6] = (value[6] & 0x0f) | 0x40;
+  value[8] = (value[8] & 0x3f) | 0x80;
+  const encoded = hex(value);
+  return `${encoded.slice(0, 8)}-${encoded.slice(8, 12)}-${encoded.slice(12, 16)}-${encoded.slice(16, 20)}-${encoded.slice(20)}`;
+}
 export function createHash(algorithm: string) {
   if (algorithm !== 'sha256') throw new Error('Unsupported simulation digest.');
   const hash = sha256.create();

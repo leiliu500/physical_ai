@@ -1,0 +1,8 @@
+bucket                   = "physical-ai-sim-dev-679343992698-us-gov-west-1"
+key                      = "simulation/terraform.tfstate"
+region                   = "us-gov-west-1"
+encrypt                  = true
+use_lockfile             = true
+kms_key_id               = "arn:aws-us-gov:kms:us-gov-west-1:679343992698:key/36ad2860-8a9e-4074-ac03-f08c433a6a7a"
+profile                  = "continue_dev_profile"
+shared_credentials_files = ["D:/Lei.Liu/.aws/credentials"]

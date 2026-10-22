@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { acknowledgementEnvelopeSchema, commandSchema, envelopeSchema } from './contracts.js';
+import { planRequestSchema, adviceSchema } from '../ai/contracts.js';
 const result = (description: string) => ({
     description,
     content: { 'application/json': { schema: { type: 'object' } } },
@@ -14,6 +15,35 @@ export const openapi = {
       'OIDC-protected operations using signed observations, durable review and acknowledged gateway execution.',
   },
   paths: {
+    '/api/ai/status': {
+      get: {
+        summary: 'Bedrock model and planning availability',
+        security,
+        responses: { '200': result('Planning configuration; no credentials are exposed') },
+      },
+    },
+    '/api/ai/plan': {
+      post: {
+        summary: 'Generate audited, validated recommendations',
+        description:
+          'Requires an operator or supervisor. Cookie sessions require matching Origin and X-CSRF-Token. No command is executed by this endpoint.',
+        security,
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: z.toJSONSchema(planRequestSchema) } },
+        },
+        responses: {
+          '200': {
+            description: 'Structured advice with model ID, region, context digest and token usage',
+            content: { 'application/json': { schema: z.toJSONSchema(adviceSchema) } },
+          },
+          '403': result('Insufficient role or invalid CSRF'),
+          '429': result('Planning capacity reached'),
+          '502': result('Invalid or incomplete model output'),
+          '503': result('Bedrock disabled, AWS credentials invalid or service unavailable'),
+        },
+      },
+    },
     '/health/live': {
       get: { summary: 'Process liveness', responses: { '200': result('Process alive') } },
     },

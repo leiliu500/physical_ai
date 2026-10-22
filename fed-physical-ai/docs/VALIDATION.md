@@ -1,17 +1,31 @@
 # Validation scope
 
-Verification covers TypeScript compilation, control decisions, authenticated HTTP behavior, the signed gateway adapter, PostgreSQL transactions, browser connection states and the isolated simulation. Production tests use fixtures under `tests/`; the explicitly generated simulation is under `src/simulation/`. Both are excluded from the production runtime image.
+Verification covers TypeScript compilation, control decisions, authenticated HTTP behavior, the signed gateway adapter, PostgreSQL transactions, Bedrock response validation, browser connection states, the isolated simulation and offline Terraform plans. Production tests use fixtures under `tests/`; the explicitly generated simulation is under `src/simulation/`. Both are excluded from the production runtime image.
 
-## Recorded local verification — 2026-10-21
+## Recorded verification — 2026-10-22
 
-| Check                                                                               | Result                                                                    |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Node.js 24.22.0 TypeScript compilation and clean build                              | Passed                                                                    |
-| Backend and simulation checks with isolated PostgreSQL 17, migrations applied twice | 44 passed, zero skipped                                                   |
-| Desktop and mobile Microsoft Edge browser checks                                    | 18 passed: 8 production console checks and 10 simulation checks           |
-| Production dependency audit                                                         | Zero reported vulnerabilities                                             |
-| Formatting                                                                          | Passed                                                                    |
-| Docker image build and deployed equipment integration                               | Not run; Docker and physical integrations unavailable in this environment |
+| Check                                                                                                               | Result                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Node.js 24.22.0 TypeScript compilation and clean build                                                              | Passed                                                                                                                                                             |
+| Backend, Bedrock adapter, ECS bootstrap and simulation checks with isolated PostgreSQL 17, migrations applied twice | 62 passed, zero skipped; 9 focused simulation/hosted API checks also passed after the HTTP browser compatibility change                                            |
+| Desktop and mobile Microsoft Edge browser checks                                                                    | 22 passed: 8 production console, 10 simulation and 4 assistant checks                                                                                              |
+| Terraform 1.16.2 / AWS provider 6.70.0 formatting, validation and mocked plan tests                                 | Passed; 7 deployment tests, including GovCloud partition checks                                                                                                    |
+| Production dependency audit                                                                                         | Zero reported vulnerabilities                                                                                                                                      |
+| Formatting                                                                                                          | Passed                                                                                                                                                             |
+| Simulation Docker image build and ECS deployment                                                                    | Passed through GovCloud CodeBuild and ECR; ECS task revision 3 healthy behind the ALB                                                                              |
+| Deployed equipment integration                                                                                      | Not run; no physical equipment connected                                                                                                                           |
+| AWS GovCloud identity, model metadata and real Bedrock Converse smoke test                                          | Passed in `us-gov-west-1` using `openai.gpt-oss-120b-1:0` and the Markdown prompt; 1,338 input / 184 output tokens on an empty synthetic snapshot                  |
+| Live ECS HTTP API and Bedrock inference                                                                             | Passed; exact model and region, valid empty synthetic snapshot response, 1,338 input / 191 output tokens                                                           |
+| Live ALB desktop/mobile Edge verification                                                                           | Passed over HTTP: three moving robots, acknowledged transfers, no page errors or horizontal overflow; browser Bedrock request used 1,971 input / 354 output tokens |
+| Simulation remote Terraform state                                                                                   | Migrated to versioned S3 with KMS encryption and S3 locking; deployed resource state verified                                                                      |
+
+The separate `infra/simulation` stack was applied in GovCloud West. It runs the browser-local synthetic facility and a server-side Bedrock bridge on ECS Fargate. The generated HTTP ALB endpoint is restricted to `3.83.200.219/32`; see the [simulation deployment guide](../../infra/simulation/README.md). The pinned image digest is `sha256:57e8a199824ce7e2146a5bb8b2153937163246a021f68fcbfe4ab3b004e43b86`.
+
+The robot icon release uses shared inline SVG geometry across the facility map, fleet cards and device tables. Seven visual states were inspected: moving, idle, charging, fault, stopped, offline and unknown. The 22 existing desktop/mobile browser checks passed. Additional checks against the deployed ALB confirmed moving robots, safety-stop icons and fleet icons at both viewport sizes, with no page errors or horizontal overflow.
+
+The final refreshed Terraform plan reported no changes. ECS reported one running task, zero pending tasks and a completed rollout; the load balancer target was healthy.
+
+The production control stack under `infra/terraform` has not been deployed. Offline tests use mocked Bedrock transports and Terraform providers; the recorded live checks above establish access only for the selected GovCloud simulation deployment.
 
 ## Automated checks
 
@@ -27,6 +41,13 @@ Verification covers TypeScript compilation, control decisions, authenticated HTT
 - Clean build removes obsolete outputs; formatting and production dependency audit support release review.
 - Simulation device movement, acknowledged completions, pause/step/reset, interlock recovery and distinct reviewer quorum.
 - Simulation-only browser cryptographic hashes match the production implementation; production static assets exclude the simulation bundle.
+- Simulation UUID generation uses cryptographically random bytes and works on the requested HTTP ALB origin without the HTTPS-only browser UUID API.
+- Bedrock exact-model requests, invalid outputs and unknown identifiers, failed credentials, bounded context, durable audit before inference and no automatic command creation.
+- Runtime Secrets Manager parsing, password URL encoding and rejection of injected runtime settings.
+- Assistant input survives simulation updates; recommendations open human review without executing an action.
+- Terraform private networking, encrypted persistence, exact-model IAM, immutable image release, disabled inference permissions and distinct OIDC audiences.
+- GovCloud defaults, matching regional certificate/secret partitions and packaging the Markdown system prompt with the server artifact.
+- Terraform-managed image verification, bootstrap inclusion, explicit Node server startup and ECS health waiting. Bootstrap start failures, timeouts, nonzero exits and missing completion evidence prevent release.
 
 Run `npm test` with `TEST_DATABASE_URL` pointing to an isolated migrated database to include real database integration. A run without that variable intentionally reports a skipped database suite. CI provisions PostgreSQL 17 and uses Node.js 24. Production browser tests use a test-only static transport, while simulation browser tests exercise the built simulator directly and verify that it contacts no operational API. These tests do not replace physical integration tests.
 

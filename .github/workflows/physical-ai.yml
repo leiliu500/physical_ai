@@ -1,12 +1,32 @@
 name: Physical AI validation
 on:
   push:
-    paths: ['fed-physical-ai/**', '.github/workflows/physical-ai.yml']
+    paths:
+      ["fed-physical-ai/**", "infra/**", ".github/workflows/physical-ai.yml"]
   pull_request:
-    paths: ['fed-physical-ai/**', '.github/workflows/physical-ai.yml']
+    paths:
+      ["fed-physical-ai/**", "infra/**", ".github/workflows/physical-ai.yml"]
 permissions:
   contents: read
 jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.16.2"
+          terraform_wrapper: false
+      - run: terraform init -backend=false -input=false
+      - run: terraform fmt -check -recursive
+      - run: terraform validate -no-color
+      - run: terraform test -no-color
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -20,14 +40,14 @@ jobs:
           POSTGRES_USER: reserve
           POSTGRES_PASSWORD: ci-only-password
           POSTGRES_DB: reserve_test
-        ports: ['5432:5432']
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U reserve -d reserve_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       DATABASE_URL: postgresql://reserve:ci-only-password@127.0.0.1:5432/reserve_test
       TEST_DATABASE_URL: postgresql://reserve:ci-only-password@127.0.0.1:5432/reserve_test
-      DATABASE_TLS: 'false'
+      DATABASE_TLS: "false"
       PLAYWRIGHT_CHANNEL: chromium
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -35,7 +55,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: fed-physical-ai/package-lock.json
       - run: npm ci

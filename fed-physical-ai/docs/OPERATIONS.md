@@ -44,6 +44,10 @@ Build, apply migrations, then start the service. Use the migration identity only
 
 Compose uses an external database and identity provider. Complete `.env` locally for Compose or inject equivalent environment variables. Do not commit completed credentials. Use image digests approved by your release process for production rollouts.
 
+For AWS, follow the [Terraform deployment guide](../../infra/terraform/README.md). After image publication, the release apply runs the database bootstrap task, requires a successful exit, starts the ECS controller container and waits for healthy service state. Application secrets and the runtime database credential are retrieved from Secrets Manager at startup. The bootstrap identity is separate from the running controller identity. Terraform reads the selected local AWS profile without importing its credential values into configuration or state.
+
+Enable the [Bedrock assistant](BEDROCK.md) with `BEDROCK_ENABLED=true`, the approved region and model `openai.gpt-oss-120b-1:0`. Configure model access, quota and `bedrock:InvokeModel` for that model. Inference failure does not affect deterministic device monitoring or permit any action to bypass controller checks. Review usage and model output quality before enabling it for operational users.
+
 ## Register a device
 
 Each device registry entry has `kind` (`robot`, `processing-line`, `environment`, `inspection`), `secret` (at least 32 characters), `required` (defaults true), `capabilities`, and `destinations` for robot transfers. Execution requires both an HTTPS `commandEndpoint` and separate `commandSecret`. Monitoring-only sources can omit both. Capabilities are `transfer`, `hold`, `set-temperature` and `quarantine`.

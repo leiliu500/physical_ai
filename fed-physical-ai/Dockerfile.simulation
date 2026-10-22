@@ -1,0 +1,29 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY tsconfig.json playwright.config.ts ./
+COPY src ./src
+COPY scripts ./scripts
+COPY public ./public
+COPY tests ./tests
+COPY e2e ./e2e
+RUN npm run build:simulation
+
+FROM node:24-bookworm-slim AS runtime
+ENV NODE_ENV=production BEDROCK_ENABLED=true AWS_REGION=us-gov-west-1 BEDROCK_REGION=us-gov-west-1
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY --from=build /app/out ./out
+COPY --from=build /app/build/src/ai ./build/src/ai
+COPY --from=build /app/build/src/core ./build/src/core
+COPY --from=build /app/build/src/platform/contracts.js ./build/src/platform/contracts.js
+COPY --from=build /app/build/src/platform/document.js ./build/src/platform/document.js
+COPY --from=build /app/build/src/platform/observability.js ./build/src/platform/observability.js
+COPY --from=build /app/build/src/simulation/preview-server.js ./build/src/simulation/preview-server.js
+COPY --from=build /app/build/scripts/serve-simulation.js ./build/scripts/serve-simulation.js
+USER node
+EXPOSE 4174
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD ["node", "-e", "fetch('http://127.0.0.1:4174/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+CMD ["node", "build/scripts/serve-simulation.js"]

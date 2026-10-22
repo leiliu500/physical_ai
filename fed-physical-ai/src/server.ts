@@ -11,6 +11,9 @@ import { HttpError, type Principal } from './platform/contracts.js';
 import { PostgresStore, type Store } from './platform/persistence.js';
 import type { ExecutionGateway } from './platform/gateway.js';
 import { logger, Metrics, RateLimiter } from './platform/observability.js';
+import { BedrockAdvisor, type Advisor } from './ai/bedrock.js';
+import { PlanningService } from './ai/service.js';
+import { loadAwsSecrets } from './platform/aws-secrets.js';
 
 const root = fileURLToPath(new URL('../../dist/', import.meta.url));
 const mime: Record<string, string> = {
@@ -51,16 +54,24 @@ export interface AppOptions {
   authentication?: Authentication;
   gateway?: ExecutionGateway;
   processOutbox?: boolean;
+  advisor?: Advisor;
 }
 export function createApp(options: AppOptions) {
   if (!options?.config) throw new Error('Explicit production configuration is required.');
   const config = options.config;
-  if (config.environment !== 'test' && (options.store || options.authentication || options.gateway))
+  if (
+    config.environment !== 'test' &&
+    (options.store || options.authentication || options.gateway || options.advisor)
+  )
     throw new Error('Runtime service dependencies must use the production adapters.');
   const store =
       options.store ?? new PostgresStore(config.databaseUrl, config.facilityId, config.databaseTls),
     controller = new Controller(store, config, options.gateway),
     authentication = options.authentication ?? new Authentication(config);
+  const planning = new PlanningService(
+    controller,
+    options.advisor ?? new BedrockAdvisor(config.bedrock),
+  );
   const log = logger(config.logLevel),
     metrics = new Metrics(),
     limiter = new RateLimiter(config.rateLimit),
@@ -172,6 +183,12 @@ export function createApp(options: AppOptions) {
           return json(202, result);
         }
         principal = await authentication.authenticate(req);
+        if (req.method === 'GET' && url.pathname === '/api/ai/status')
+          return json(200, planning.status());
+        if (req.method === 'POST' && url.pathname === '/api/ai/plan') {
+          authentication.checkMutation(req, principal);
+          return json(200, await planning.plan(parse(await body(req)), principal, requestId));
+        }
         if (req.method === 'GET' && url.pathname === '/api/session')
           return json(200, {
             subject: principal.subject,
@@ -281,7 +298,7 @@ export function createApp(options: AppOptions) {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   let app: ReturnType<typeof createApp> | undefined;
   try {
-    const config = loadConfig();
+    const config = loadConfig(await loadAwsSecrets());
     app = createApp({ config });
     await app.ready;
     app.server.listen(config.port, config.host, () =>

@@ -1,0 +1,17 @@
+aws_region                   = "us-gov-west-1"
+aws_profile                  = "continue_dev_profile"
+aws_shared_credentials_files = ["D:/Lei.Liu/.aws/credentials"]
+project                      = "physical-ai"
+environment                  = "dev"
+allowed_ingress_cidrs         = ["203.0.113.10/32"] # Replace with your approved client/VPN address.
+service_domain               = "physical-ai.your-organization.example"
+certificate_arn              = "arn:aws-us-gov:acm:us-gov-west-1:123456789012:certificate/REPLACE"
+oidc_issuer                  = "https://identity.your-organization.example"
+oidc_audience                = "physical-ai-api"
+oidc_client_id               = "physical-ai-web"
+facility_id                  = "authorized-facility"
+app_secret_arn               = "arn:aws-us-gov:secretsmanager:us-gov-west-1:123456789012:secret:physical-ai/application-REPLACE"
+deploy_service               = true
+# Pin the pushed image digest. Terraform runs bootstrap and starts the server.
+# For the first apply before ECR contains an image, use -var=deploy_service=false.
+# image_digest = "sha256:..."

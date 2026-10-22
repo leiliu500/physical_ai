@@ -1,0 +1,7 @@
+bucket       = "REPLACE-with-existing-encrypted-terraform-state-bucket"
+key          = "physical-ai/dev/terraform.tfstate"
+region       = "us-gov-west-1"
+encrypt      = true
+use_lockfile = true
+profile      = "continue_dev_profile"
+shared_credentials_files = ["D:/Lei.Liu/.aws/credentials"]

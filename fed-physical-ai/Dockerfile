@@ -1,5 +1,6 @@
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && mkdir -p /app/certs && curl --fail --proto '=https' --tlsv1.2 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /app/certs/rds-global-bundle.pem
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.json playwright.config.ts ./
@@ -12,12 +13,16 @@ RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=4173
+ENV NODE_EXTRA_CA_CERTS=/app/certs/rds-global-bundle.pem
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=build /app/build/src/server.js ./build/src/server.js
 COPY --from=build /app/build/src/platform ./build/src/platform
 COPY --from=build /app/build/src/core ./build/src/core
+COPY --from=build /app/build/src/ai ./build/src/ai
+COPY --from=build /app/certs ./certs
+COPY --from=build /app/build/scripts/bootstrap-aws.js ./build/scripts/bootstrap-aws.js
 COPY --from=build /app/build/scripts/migrate.js ./build/scripts/migrate.js
 COPY --from=build /app/build/scripts/verify-audit.js ./build/scripts/verify-audit.js
 COPY --from=build /app/build/scripts/publish-observation.js ./build/scripts/publish-observation.js

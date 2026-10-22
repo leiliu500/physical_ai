@@ -67,5 +67,12 @@ export function simulationConfig(): PlatformConfig {
     telemetryMaxAgeSeconds: 120,
     rateLimit: 6000,
     logLevel: 'silent',
+    bedrock: {
+      enabled: false,
+      region: 'us-gov-west-1',
+      modelId: 'openai.gpt-oss-120b-1:0',
+      maxTokens: 2048,
+      timeoutMs: 45000,
+    },
   };
 }

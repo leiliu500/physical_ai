@@ -4,6 +4,9 @@ The hosted Site runs an explicitly labeled browser-local simulation. It produces
 
 ## Run locally
 
+For the AWS-hosted simulation with a real Bedrock assistant and a generated ALB URL, see
+the [GovCloud simulation deployment](../../infra/simulation/README.md).
+
 Use Node.js 24 and install dependencies, then run:
 
 ```sh
@@ -29,6 +32,8 @@ The initial sequence opens an inspection exception immediately, an equipment eve
 
 `src/simulation` supplies only the generated devices, session memory store, synthetic reviewer identities and in-memory gateway. It imports the same TypeScript `Controller` used by the production service. Device envelopes pass signature, schema, freshness and replay validation; reviews use the same evidence binding and quorum rules; commands use the same queued, accepted, completed and uncertain transitions. The browser build supplies a simulation-only SHA-256/HMAC compatibility layer. Production continues to use Node's cryptography implementation.
 
-The simulator does not make network requests to a control API or equipment gateway. It is not a hardware-in-the-loop environment or evidence of model performance, facility throughput or safety certification. Simulation keys and model digests are public fixtures, unsuitable for any real integration. The assurance page identifies these limits, and state exports are marked as simulation data.
+The simulator does not make network requests to a control API or equipment gateway. The optional **AI operations** workspace checks for a local Bedrock bridge. Running `npm run simulation:bedrock` enables real server-side inference on the synthetic snapshot; requests require explicit user submission. Follow the [Bedrock guide](BEDROCK.md) for AWS profile configuration. The static hosted Site has no Bedrock backend and reports planning as unavailable.
+
+Simulation is not a hardware-in-the-loop environment or evidence of model performance, facility throughput or safety certification. Simulation keys and model digests are public fixtures, unsuitable for any real integration. The assurance page identifies these limits, and state exports are marked as simulation data.
 
 The run pauses at approximately 6,000 audit records to bound session memory. Export records before reset if needed; browser memory is not a durable audit store. The existing private Site's access policy is preserved.

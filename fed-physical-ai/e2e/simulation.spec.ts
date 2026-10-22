@@ -10,6 +10,10 @@ test('simulation shows active devices, moving robots and completed transfers wit
   page.on('request', (request) => {
     if (new URL(request.url()).pathname.startsWith('/api/')) apiRequests.push(request.url());
   });
+  // Match a generated HTTP ALB origin, where randomUUID is unavailable.
+  await page.addInitScript(() => {
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { value: undefined });
+  });
   await page.goto('/');
   await expect(page.getByText('SIMULATION ENVIRONMENT', { exact: true })).toBeVisible();
   await expect(

@@ -11,6 +11,8 @@ flowchart LR
   TLS --> Service[TypeScript control service]
   Service <--> IdP[Organization OIDC provider]
   Service <--> DB[(PostgreSQL state and audit)]
+  Service -->|Bounded text context| Bedrock[Bedrock planning assistant]
+  Bedrock -->|Validated recommendations| Service
   Devices[Registered sensors and inspection systems] -->|Signed observations| Service
   Service -->|Signed command with stable identifier| Gateway[Configured HTTPS execution gateways]
   Gateway -->|Signed acceptance and completion| Service
@@ -27,7 +29,9 @@ OIDC authorization code flow uses PKCE, state and nonce verification. Access tok
 
 Device messages are strict typed envelopes signed over their exact UTF-8 bytes. Each device has its own key, kind, capabilities, required status and optional execution endpoint. The service validates timestamp freshness, a durable increasing sequence and message identity before committing. Inspection results additionally identify an approved model version and artifact SHA-256. A signature authenticates the source's claim; it does not prove the physical scene or remotely attest the model process.
 
-The service contains deterministic policy checks for processing-line vibration and temperature, zone temperature and inspection exceptions. It does not train or execute an inference model. Your edge inspection system supplies measured counts, confidence, inspection identity and model lineage. Model qualification and physical sensor calibration remain integration responsibilities.
+The service contains deterministic policy checks for processing-line vibration and temperature, zone temperature and inspection exceptions. Your edge inspection system supplies measured counts, confidence, inspection identity and model lineage. Model qualification and physical sensor calibration remain integration responsibilities.
+
+The optional [Bedrock assistant](BEDROCK.md) performs text planning using `openai.gpt-oss-120b-1:0`. Only authenticated operators can request inference. The service constructs a limited context without device secrets, validates the response schema and registered identifiers, and records request and result digests in the audit ledger. Recommendations create no commands. A user must submit each action through the existing authorization and safety checks. The LLM supplies no approval votes or dispatch release.
 
 ## Decisions and execution
 
@@ -62,3 +66,5 @@ This release is a single-controller architecture. Do not increase application re
 ## Delivery boundary
 
 The runtime image uses Node.js 24, a non-root user and no test doubles. Compose drops capabilities, uses a read-only application filesystem and exposes HTTPS through Caddy. Deploy to your own approved environment to connect PostgreSQL, OIDC and physical gateways. A separately hosted static console cannot provide those services.
+
+The [AWS Terraform deployment](../../infra/terraform/README.md) uses an HTTPS ALB, private Fargate tasks and a private encrypted PostgreSQL database. The runtime task reads application and database secrets from Secrets Manager; a separate bootstrap role migrates the schema and provisions the restricted database identity. The task role can invoke only the requested regional Bedrock model. The service remains one controller per database, with deliberate interruption during replacement.

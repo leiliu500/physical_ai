@@ -1,5 +1,7 @@
 import type { DeviceCommand, OperationsState, Proposal, Reading } from '../core/types.js';
 import type { SimulationRuntime, SimulationStatus } from '../simulation/runtime.js';
+import type { AdviceResult, AdvisorContext } from '../ai/contracts.js';
+import { mobileRobotIcon, robotArtwork, robotVisualState } from './robot-icon.js';
 interface DeviceStatus {
   id: string;
   kind: string;
@@ -49,7 +51,8 @@ interface AuditRecord {
   previousHash: string;
   hash: string;
 }
-type View = 'overview' | 'fleet' | 'health' | 'inspections' | 'reviews' | 'assurance' | 'audit';
+type View =
+  'overview' | 'fleet' | 'health' | 'inspections' | 'reviews' | 'assistant' | 'assurance' | 'audit';
 type Connection = 'connecting' | 'ready' | 'signin' | 'unavailable';
 const $ = <T extends HTMLElement = HTMLElement>(selector: string): T => {
   const node = document.querySelector<T>(selector);
@@ -85,6 +88,10 @@ const labels: Record<View, [string, string]> = {
     'Inspection results with verified model provenance and traceable exceptions.',
   ],
   reviews: ['Decision workspace', 'Review current evidence before authorizing physical execution.'],
+  assistant: [
+    'AI operations assistant',
+    'Bedrock reasoning over an operational snapshot, with human review before execution.',
+  ],
   assurance: [
     'Platform assurance',
     'Identity, persistence, execution boundaries and approved component lineage.',
@@ -105,6 +112,11 @@ let readGeneration = 0;
 let toastTimer: ReturnType<typeof setTimeout>;
 const simulationPage = document.body.dataset.runtime === 'simulation';
 let simulator: SimulationRuntime | undefined;
+let aiStatus: { enabled: boolean; modelId: string; region: string } | null = null;
+let aiAdvice: AdviceResult | null = null,
+  aiBusy = false,
+  aiError = '',
+  aiPrompt = 'Summarize operational risks and recommend the next safe steps.';
 class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -194,7 +206,8 @@ function deviceTable(kind?: string): string {
   return `<div class="table-scroll"><table><thead><tr><th>DEVICE / CLASS</th><th>OBSERVATION</th><th>STATUS</th><th>LAST OBSERVED</th></tr></thead><tbody>${devices
     .map((d) => {
       const r = state!.devices[d.id];
-      return `<tr><td><strong>${escape(d.id)}</strong><small>${escape(d.kind)}</small></td><td>${r ? escape(readingSummary(r.reading)) : '—'}</td><td>${badge(d.status, d.status === 'online' ? 'good' : 'warning')}</td><td class="muted">${escape(when(d.observedAt))}</td></tr>`;
+      const identity = `<div><strong>${escape(d.id)}</strong><small>${escape(d.kind)}</small></div>`;
+      return `<tr><td>${d.kind === 'robot' ? `<div class="device-identity"><span class="robot-table-icon">${mobileRobotIcon(robotVisualState(r?.reading, d.status))}</span>${identity}</div>` : identity}</td><td>${r ? escape(readingSummary(r.reading)) : '—'}</td><td>${badge(d.status, d.status === 'online' ? 'good' : 'warning')}</td><td class="muted">${escape(when(d.observedAt))}</td></tr>`;
     })
     .join('')}</tbody></table></div>`;
 }
@@ -248,25 +261,31 @@ function simulationActivity(): string {
   const robots = Object.entries(state!.devices).filter(
     ([, device]) => device.reading.kind === 'robot',
   );
-  const map = `<div class="facility-map"><svg viewBox="0 0 680 230" role="img" aria-label="Simulated facility with moving mobile robots"><defs><pattern id="map-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#e6ece8" stroke-width="0.6"/></pattern></defs><rect width="680" height="230" fill="url(#map-grid)"/><path d="M90 140H590" class="map-route"/>${[
+  const map = `<div class="facility-map"><svg viewBox="0 0 680 380" role="img" aria-label="Simulated facility with moving mobile robots"><defs><pattern id="map-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#e6ece8" stroke-width="0.6"/></pattern></defs><rect width="680" height="380" fill="url(#map-grid)"/>${[128, 208, 288].map((y) => `<path d="M90 ${y}H590" class="map-route"/>`).join('')}${[
     [20, 'RECEIVING', 'Dock and intake'],
     [270, 'CASH PROCESSING', 'Sorting and inspection'],
     [520, 'SECURE STORAGE', 'Controlled access'],
   ]
     .map(
       ([x, title, detail]) =>
-        `<rect x="${x}" y="20" width="140" height="66" rx="8" class="map-zone"/><text x="${Number(x) + 70}" y="47" text-anchor="middle" class="map-title">${title}</text><text x="${Number(x) + 70}" y="66" text-anchor="middle" class="map-detail">${detail}</text><path d="M${Number(x) + 70} 86V140" class="map-connector"/>`,
+        `<rect x="${x}" y="20" width="140" height="66" rx="8" class="map-zone"/><text x="${Number(x) + 70}" y="47" text-anchor="middle" class="map-title">${title}</text><text x="${Number(x) + 70}" y="66" text-anchor="middle" class="map-detail">${detail}</text><path d="M${Number(x) + 70} 86V288" class="map-connector"/>`,
     )
     .join('')}${robots
-    .map(([, device], i) => {
+    .map(([id, device], i) => {
       const r = device.reading;
       if (r.kind !== 'robot') return '';
-      const y = r.position.y + (i - 1) * 25;
-      return `<g transform="translate(${r.position.x} ${y})" class="map-robot ${r.safetyStop ? 'stopped' : ''}"><circle r="16"/><text text-anchor="middle" y="4">${i + 1}</text></g>`;
+      const y = r.position.y + 68 + (i - 1) * 80;
+      const visual = robotVisualState(r);
+      return `<g transform="translate(${r.position.x} ${y})" class="map-robot ${visual === 'stopped' ? 'stopped' : ''}" role="img" aria-label="${escape(id)}: ${visual}"><title>${escape(id)} · ${visual} · ${r.battery.toFixed(0)}% battery</title><g transform="translate(-28 -28) scale(.875)">${robotArtwork(visual)}</g><rect x="-31" y="29" width="62" height="19" rx="5" class="map-unit-plate"/><text text-anchor="middle" y="42" class="map-unit-label">${escape(id.replace(/^SIM-/, ''))}</text></g>`;
     })
     .join(
       '',
-    )}<text x="20" y="210" class="map-detail">SYNTHETIC COORDINATES · SIMULATION ONLY</text></svg><div class="map-legend">${robots.map(([id, d], i) => `<span><b>${i + 1}</b>${escape(id)} ${badge(d.reading.kind === 'robot' ? d.reading.status : '')}</span>`).join('')}</div></div>`;
+    )}<text x="20" y="370" class="map-detail">SYNTHETIC COORDINATES · SIMULATION ONLY</text></svg><div class="map-legend" aria-label="Mobile robot status">${robots
+    .map(([id, d]) => {
+      const visual = robotVisualState(d.reading);
+      return `<span class="robot-key"><span class="robot-key-icon">${mobileRobotIcon(visual)}</span><strong>${escape(id)}</strong>${badge(visual, ['stopped', 'fault'].includes(visual) ? 'critical' : 'neutral')}</span>`;
+    })
+    .join('')}</div></div>`;
   const events = `<ol class="activity-feed" aria-label="Simulation activity">${sim.events
     .slice(0, 7)
     .map(
@@ -297,6 +316,7 @@ async function simulationControl(data: Record<string, unknown>): Promise<void> {
     if (data.action === 'reset') {
       auditRecords = [];
       auditAfter = 0;
+      aiAdvice = null;
     }
     session = (await request('/api/session')) as Session;
     await refresh();
@@ -317,10 +337,10 @@ function fleet(): string {
             const record = state!.devices[d.id],
               r = record?.reading;
             if (!r || r.kind !== 'robot')
-              return `<article class="robot-card"><h3>${escape(d.id)}</h3>${badge(d.status, 'warning')}<p>No authenticated robot observation has been received.</p></article>`;
+              return `<article class="robot-card"><div class="robot-title"><span class="robot-avatar">${mobileRobotIcon('unknown')}</span><h3>${escape(d.id)}</h3>${badge(d.status, 'warning')}</div><p>No authenticated robot observation has been received.</p></article>`;
             const safe =
               d.status === 'online' && !r.safetyStop && r.interlockReady && r.status === 'idle';
-            return `<article class="robot-card"><div class="robot-title"><span class="device-icon">⬡</span><div><h3>${escape(d.id)}</h3><p>${escape(r.position.frame)} · (${r.position.x}, ${r.position.y})</p></div>${badge(d.status, d.status === 'online' ? 'good' : 'warning')}</div><dl><div><dt>Reported state</dt><dd>${escape(r.status)}</dd></div><div><dt>Battery</dt><dd>${r.battery.toFixed(0)}%</dd></div><div><dt>Hardware stop</dt><dd>${r.safetyStop ? 'Engaged' : 'Clear'}</dd></div><div><dt>Interlock</dt><dd>${r.interlockReady ? 'Ready' : 'Not ready'}</dd></div></dl>${button('Request transfer ↗', 'transfer', d.id, !safe || !d.executionConfigured || !permitted('transfer') || state!.dispatchInhibited)}</article>`;
+            return `<article class="robot-card"><div class="robot-title"><span class="robot-avatar">${mobileRobotIcon(robotVisualState(r, d.status))}</span><div class="robot-identity"><h3>${escape(d.id)}</h3><p>${escape(r.position.frame)} · (${r.position.x}, ${r.position.y})</p></div>${badge(d.status, d.status === 'online' ? 'good' : 'warning')}</div><dl><div><dt>Reported state</dt><dd>${escape(r.status)}</dd></div><div><dt>Battery</dt><dd>${r.battery.toFixed(0)}%</dd></div><div><dt>Hardware stop</dt><dd>${r.safetyStop ? 'Engaged' : 'Clear'}</dd></div><div><dt>Interlock</dt><dd>${r.interlockReady ? 'Ready' : 'Not ready'}</dd></div></dl>${button('Request transfer ↗', 'transfer', d.id, !safe || !d.executionConfigured || !permitted('transfer') || state!.dispatchInhibited)}</article>`;
           })
           .join('')}</div>`
       : empty(
@@ -408,6 +428,87 @@ function reviewCards(proposals: Proposal[]): string {
 function reviews(): string {
   return `${reviewCards(state!.proposals.filter((p) => p.status === 'pending'))}${panel('Authorized execution requests', commandTable(state!.commands.filter((c) => Boolean(c.proposalId))))}`;
 }
+function assistant(): string {
+  const advice = aiAdvice;
+  return `<div class="assurance-banner"><p class="eyebrow">AMAZON BEDROCK · PLANNING</p><h2>Reason about operations.</h2><p>Model: <code>${escape(aiStatus?.modelId ?? 'openai.gpt-oss-120b-1:0')}</code> · ${escape(aiStatus?.region ?? 'us-gov-west-1')}</p></div>${panel('Ask the operations assistant', `<div class="panel-body"><p class="note">${simulationPage ? 'Only the synthetic facility snapshot is sent to the server-side Bedrock bridge.' : 'The server selects the registered device readings and pending reviews to send to Bedrock.'} Recommendations require explicit operator action and the existing controller checks.</p>${!aiStatus?.enabled ? '<div class="ai-status">Bedrock is not enabled on this server. For localhost, start <code>npm run simulation:bedrock</code> with a valid AWS profile. The static hosted simulator has no Bedrock backend.</div>' : ''}<form id="ai-form"><label for="ai-prompt">Operational request</label><textarea id="ai-prompt" name="prompt" minlength="5" maxlength="2000" rows="4" required>${escape(aiPrompt)}</textarea><button class="button primary" type="submit" ${aiBusy || !aiStatus?.enabled || !permitted('transfer') ? 'disabled' : ''}>${aiBusy ? 'Requesting Bedrock advice…' : 'Generate recommendations'}</button></form>${aiError ? `<p class="ai-error" role="alert">${escape(aiError)}</p>` : ''}</div>`)}${advice ? panel('Model recommendation', `<div class="panel-body ai-result"><div>${badge(advice.source === 'simulation' ? 'Synthetic context' : 'Production snapshot', 'warning')}<span class="muted"> ${escape(when(advice.createdAt))}</span></div><h3>${escape(advice.summary)}</h3><ul>${advice.observations.map((value) => `<li>${escape(value)}</li>`).join('')}</ul><div class="ai-recommendations">${advice.recommendations.map((recommendation, index) => `<article><h3>${escape(recommendation.kind === 'transfer' ? `${recommendation.deviceId} → ${recommendation.destination}` : recommendation.kind === 'review' ? 'Open the pending evidence review' : 'Prepare a dispatch hold')}</h3><p>${escape(recommendation.rationale)}</p>${button(recommendation.kind === 'transfer' ? 'Prepare transfer for review' : recommendation.kind === 'review' ? 'Open decision workspace' : 'Review dispatch hold', 'ai-prepare', String(index), !permitted('transfer'))}</article>`).join('')}</div>${advice.limitations.length ? `<h3>Limits and missing information</h3><ul>${advice.limitations.map((value) => `<li>${escape(value)}</li>`).join('')}</ul>` : ''}<p class="muted">${advice.usage.inputTokens} input / ${advice.usage.outputTokens} output tokens · Context SHA-256</p><code class="hash">${escape(advice.contextDigest)}</code><p class="muted">No command was dispatched by this model response.</p></div>`) : ''}`;
+}
+async function aiFetch(path: string, data?: unknown): Promise<unknown> {
+  const response = await fetch(`${simulationPage ? '/simulation/ai' : '/api/ai'}/${path}`, {
+    method: data === undefined ? 'GET' : 'POST',
+    credentials: 'same-origin',
+    cache: 'no-store',
+    signal: AbortSignal.timeout(65000),
+    ...(data === undefined
+      ? {}
+      : {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(simulationPage
+              ? { 'X-Simulation-Request': '1' }
+              : csrf
+                ? { 'X-CSRF-Token': csrf }
+                : {}),
+          },
+          body: JSON.stringify(data),
+        }),
+  });
+  const result = (await response.json().catch(() => ({}))) as { error?: string };
+  if (!response.ok)
+    throw new Error(
+      result.error ?? 'The Bedrock planning service is unavailable on this deployment.',
+    );
+  return result;
+}
+async function loadAiStatus(): Promise<void> {
+  try {
+    aiStatus = (await aiFetch('status')) as typeof aiStatus;
+  } catch {
+    aiStatus = { enabled: false, modelId: 'openai.gpt-oss-120b-1:0', region: 'us-gov-west-1' };
+  }
+  if (view === 'assistant') render();
+}
+async function askAi(): Promise<void> {
+  if (aiBusy || !state || !platform) return;
+  aiBusy = true;
+  aiAdvice = null;
+  aiError = '';
+  render();
+  try {
+    const context: AdvisorContext = {
+      source: 'simulation',
+      facilityId: state.facilityId,
+      dispatchInhibited: state.dispatchInhibited,
+      devices: platform.devices.slice(0, 40).map((device) => ({
+        id: device.id,
+        kind: device.kind as AdvisorContext['devices'][number]['kind'],
+        observedAt: state!.devices[device.id]?.observedAt ?? null,
+        reading: state!.devices[device.id]?.reading ?? null,
+        destinations: device.destinations.slice(0, 50),
+        capabilities: device.capabilities,
+      })),
+      reviews: state.proposals
+        .filter((proposal) => proposal.status === 'pending')
+        .slice(0, 40)
+        .map((proposal) => ({
+          id: proposal.id,
+          deviceId: proposal.deviceId,
+          action: proposal.action,
+          title: proposal.title,
+          approvals: proposal.approvals.length,
+          requiredApprovals: proposal.requiredApprovals,
+        })),
+    };
+    aiAdvice = (await aiFetch(
+      'plan',
+      simulationPage ? { prompt: aiPrompt, context } : { prompt: aiPrompt },
+    )) as AdviceResult;
+  } catch (error) {
+    aiError = error instanceof Error ? error.message : 'Bedrock planning failed.';
+  } finally {
+    aiBusy = false;
+    render();
+  }
+}
 function assurance(): string {
   if (simulationPage)
     return `${panel('Simulation assurance', '<div class="panel-body"><h2>Isolated browser session</h2><p>Device readings, reviewer identities, model lineage and gateway outcomes are generated in memory. This environment exercises the same controller policy, quorum, replay protection and acknowledgement state transitions as the production service.</p><div class="note">No organization OIDC, PostgreSQL persistence, qualified inference model or physical equipment is connected to this simulation. Reloading starts a new run.</div></div>')}${panel('Active simulation controls', `<div class="table-scroll"><table><tbody><tr><th>Identity</th><td>Two explicitly simulated reviewer identities</td></tr><tr><th>Persistence</th><td>Browser session memory · no durable retention</td></tr><tr><th>Device protocol</th><td>Synthetic HMAC-signed envelopes through the shared controller</td></tr><tr><th>Gateway</th><td>In-memory acceptance and completion · no network actuation</td></tr><tr><th>Scenario</th><td>${escape(platform?.simulation?.scenario)}</td></tr><tr><th>Audit records</th><td>${platform!.audit.sequence} linked records in this run</td></tr><tr><th>Fixture model</th><td>SIM-vision · synthetic-1 · no physical inference</td></tr></tbody></table></div>`)}`;
@@ -484,8 +585,11 @@ function render(): void {
       `<div class="access-card"><p class="eyebrow">PRODUCTION SERVICE CONNECTION</p><h1>${connection === 'connecting' ? 'Connecting to operations…' : 'Control service unavailable'}</h1><p>${connection === 'connecting' ? 'Verifying the configured API and organization session.' : 'Serve this console with the configured PostgreSQL-backed control service and organization identity provider. No device status or execution result is generated locally.'}</p>${button('Retry connection', 'reconnect')}</div>`;
     return;
   }
+  if (view === 'assistant' && active?.closest('#ai-form') && !aiBusy && !aiAdvice && !aiError)
+    return;
   $('#main').innerHTML =
-    heading() + { overview, fleet, health, inspections, reviews, assurance, audit }[view]();
+    heading() +
+    { overview, fleet, health, inspections, reviews, assistant, assurance, audit }[view]();
   if (action)
     document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((node) => {
       if (node.dataset.action === action && node.dataset.id === id)
@@ -641,6 +745,17 @@ document.addEventListener('click', (event) => {
   if (action === 'inhibit') openAction('inhibit');
   if (action === 'release') openAction('release-inhibit');
   if (action === 'transfer') openAction('transfer', id);
+  if (action === 'ai-prepare') {
+    const recommendation = aiAdvice?.recommendations[Number(id)];
+    if (recommendation?.kind === 'review') location.hash = 'reviews';
+    if (recommendation?.kind === 'inhibit') openAction('inhibit');
+    if (recommendation?.kind === 'transfer') {
+      openAction('transfer', recommendation.deviceId);
+      $<HTMLSelectElement>('#action-form [name="destination"]').value = recommendation.destination;
+      $<HTMLInputElement>('#action-form [name="reference"]').value =
+        `AI-${aiAdvice!.id.slice(0, 8)}`;
+    }
+  }
   if (action === 'cancel-dialog') $<HTMLDialogElement>('#action-dialog').close();
   if (['approve', 'reject', 'refresh-review'].includes(action)) {
     const p = state?.proposals.find((p) => p.id === id);
@@ -695,7 +810,18 @@ function navigate(): void {
   view = Object.hasOwn(labels, next) ? (next as View) : 'overview';
   render();
   if (view === 'audit' && !auditRecords.length && connection === 'ready') void loadAudit();
+  if (view === 'assistant' && !aiStatus) void loadAiStatus();
 }
+document.addEventListener('input', (event) => {
+  if (event.target instanceof HTMLTextAreaElement && event.target.id === 'ai-prompt')
+    aiPrompt = event.target.value;
+});
+document.addEventListener('submit', (event) => {
+  if (event.target instanceof HTMLFormElement && event.target.id === 'ai-form') {
+    event.preventDefault();
+    void askAi();
+  }
+});
 window.addEventListener('hashchange', navigate);
 navigate();
 async function boot(): Promise<void> {

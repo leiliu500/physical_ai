@@ -31,7 +31,11 @@ await build({
   alias: { 'node:crypto': resolve(root, 'src/simulation/browser-crypto.ts') },
   metafile: true,
 }).then(async (result) => {
-  if (Object.keys(result.metafile!.inputs).some((name) => /node_modules\/(pg|jose)\//.test(name)))
+  if (
+    Object.keys(result.metafile!.inputs).some((name) =>
+      /node_modules\/(pg|jose|@aws-sdk)\//.test(name),
+    )
+  )
     throw new Error('Simulation bundle unexpectedly includes production service adapters.');
 });
 console.log('Built isolated browser simulation in out/. Production assets remain in dist/.');
