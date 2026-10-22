@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 test.use({ baseURL: 'http://127.0.0.1:4174' });
 
 test('simulation shows active devices, moving robots and completed transfers without an API backend', async ({
@@ -54,6 +55,71 @@ test('simulation pause, advance and reset controls work', async ({ page }) => {
   await page.getByRole('button', { name: 'Reset run' }).click();
   await expect(page.locator('#sim-clock')).toContainText('t+0s');
   await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+});
+
+test('manual transfer preserves the reference and destination and completes the requested transfer', async ({
+  page,
+}) => {
+  await page.goto('/#fleet');
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  const step = async (count: number) => {
+    for (let i = 0; i < count; i++) {
+      const before = await page.locator('#sim-clock').textContent();
+      await page.getByRole('button', { name: 'Advance 1s', exact: true }).click();
+      await expect(page.locator('#sim-clock')).not.toHaveText(before!);
+    }
+  };
+  await step(9);
+  const robot = page.locator('.robot-card').filter({ hasText: 'SIM-AMR-01' });
+  await expect(robot.getByRole('button', { name: /Request transfer/ })).toBeEnabled();
+  await robot.getByRole('button', { name: /Request transfer/ }).click();
+  const dialog = page.getByRole('dialog');
+  const reference = dialog.getByLabel('Transfer reference');
+  await dialog.getByLabel('Authorized destination').selectOption('Secure storage');
+  await reference.fill('SIM-TRANSFER-001');
+  await reference.click();
+  await expect(reference).toHaveValue('SIM-TRANSFER-001');
+  // The simulator continues refreshing the underlying workspace while the dialog is open.
+  await page.waitForTimeout(1500);
+  await expect(reference).toBeFocused();
+  await expect(reference).toHaveValue('SIM-TRANSFER-001');
+  await expect(dialog.getByLabel('Authorized destination')).toHaveValue('Secure storage');
+  await dialog.getByRole('button', { name: 'Submit request', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator('#notification')).toContainText('Request recorded.');
+  await step(10);
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: /Export state/ }).click(),
+  ]);
+  const exported = JSON.parse(await readFile((await download.path())!, 'utf8'));
+  const transfers = exported.state.commands.filter(
+    (command: { parameters: { reference?: string } }) =>
+      command.parameters.reference === 'SIM-TRANSFER-001',
+  );
+  expect(transfers).toHaveLength(1);
+  expect(transfers[0]).toMatchObject({
+    deviceId: 'SIM-AMR-01',
+    action: 'transfer',
+    status: 'succeeded',
+    parameters: { reference: 'SIM-TRANSFER-001', destination: 'Secure storage' },
+  });
+});
+
+test('dispatch reason remains editable and can be submitted from the shared operation dialog', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Inhibit dispatch', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  const reason = dialog.getByLabel('Operational reason');
+  await reason.fill('Simulation operator requested a dispatch hold.');
+  await reason.click();
+  await expect(reason).toHaveValue('Simulation operator requested a dispatch hold.');
+  await dialog.getByRole('button', { name: 'Submit request', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText('Dispatch inhibited', { exact: true })).toBeVisible();
+  await expect(page.locator('#notification')).toContainText('New dispatch has been inhibited.');
 });
 test('two simulated reviewers authorize an inspection quarantine through the real controller', async ({
   page,

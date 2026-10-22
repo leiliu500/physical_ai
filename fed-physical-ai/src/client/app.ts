@@ -732,9 +732,12 @@ async function exportAudit(): Promise<void> {
   }
 }
 document.addEventListener('click', (event) => {
+  // The form stores its operation in data-action; only buttons initiate click actions.
   const target =
-    event.target instanceof Element ? event.target.closest<HTMLElement>('[data-action]') : null;
-  if (!target || (target instanceof HTMLButtonElement && target.disabled)) return;
+    event.target instanceof Element
+      ? event.target.closest<HTMLButtonElement>('button[data-action]')
+      : null;
+  if (!target || target.disabled) return;
   const action = target.dataset.action!,
     id = target.dataset.id ?? '';
   if (action === 'reconnect') {

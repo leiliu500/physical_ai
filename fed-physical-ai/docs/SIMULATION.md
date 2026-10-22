@@ -28,6 +28,14 @@ The workspace starts three mobile robots transferring synthetic cash containers 
 
 The initial sequence opens an inspection exception immediately, an equipment event after 18 simulation seconds and a temperature event after 38 seconds. Reviews can approve a line hold or temperature response. Quarantine needs approval from both simulated reviewers. Robot interlock inhibits new dispatch and stops the affected simulated robot; returning to normal requires an explicit dispatch release.
 
+## Request a manual robot transfer
+
+1. Open **Fleet operations** and select **Pause**. Use **Advance 1s** until the chosen robot reports **idle**; the initial transfers normally finish at nine simulation seconds.
+2. Select **Request transfer**, choose an authorized destination such as **Secure storage**, and enter a tracking reference such as `SIM-TRANSFER-001`.
+3. Select **Submit request**, then **Resume** to run the queued transfer and observe its acknowledgement and completion. **Advance 1s** can also progress it while paused.
+
+Pausing briefly keeps the automatic workload from assigning another transfer while you fill in the form. The reference accepts up to 100 characters and is retained with the command in exported state. The shared controller still checks readiness, interlocks and authorization when the request is submitted and dispatched.
+
 ## Relationship to production
 
 `src/simulation` supplies only the generated devices, session memory store, synthetic reviewer identities and in-memory gateway. It imports the same TypeScript `Controller` used by the production service. Device envelopes pass signature, schema, freshness and replay validation; reviews use the same evidence binding and quorum rules; commands use the same queued, accepted, completed and uncertain transitions. The browser build supplies a simulation-only SHA-256/HMAC compatibility layer. Production continues to use Node's cryptography implementation.
