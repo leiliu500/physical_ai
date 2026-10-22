@@ -1,0 +1,12 @@
+node_modules
+build
+dist
+out
+.git
+.openai
+.runtime
+.env
+.env.*
+test-results
+playwright-report
+docs

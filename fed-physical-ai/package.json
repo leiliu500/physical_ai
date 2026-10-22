@@ -1,0 +1,41 @@
+{
+  "name": "reserve-physical-ai-platform",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Production Physical AI operations with signed device observations and accountable execution",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node scripts/clean.ts && tsc && node build/scripts/build.js",
+    "build:simulation": "npm run build && node build/scripts/build-simulation.js",
+    "simulation": "npm run build:simulation && node build/scripts/preview-simulation.js",
+    "start": "npm run build && node build/src/server.js",
+    "dev": "npm start",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node build/scripts/test.js",
+    "test:e2e": "npm run build:simulation && playwright test",
+    "start:service": "node build/src/server.js",
+    "db:migrate": "node build/scripts/migrate.js",
+    "device:publish": "node build/scripts/publish-observation.js",
+    "audit:verify": "node build/scripts/verify-audit.js",
+    "format": "prettier --write src scripts tests e2e public docs *.json *.yaml playwright.config.ts README.md",
+    "format:check": "prettier --check src scripts tests e2e public docs *.json *.yaml playwright.config.ts README.md"
+  },
+  "devDependencies": {
+    "@noble/hashes": "^1.8.0",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "buffer": "^6.0.3",
+    "esbuild": "^0.28.2",
+    "prettier": "3.9.10",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "jose": "^6.2.13",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  }
+}

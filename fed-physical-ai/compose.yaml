@@ -1,0 +1,48 @@
+name: reserve-physical-ai
+services:
+  app:
+    image: reserve-physical-ai:2.0.0
+    build: .
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set the HTTPS control service origin}
+      FACILITY_ID: ${FACILITY_ID:?Set the authorized facility identifier}
+      DATABASE_URL: ${DATABASE_URL:?Set the migrated PostgreSQL connection URL}
+      DATABASE_TLS: ${DATABASE_TLS:-true}
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set the organization OIDC issuer}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:?Set the resource API audience}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?Set the confidential web client identifier}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set the confidential web client secret}
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:?Set a base64 encoded 32 byte session key}
+      DEVICE_KEYS_JSON: ${DEVICE_KEYS_JSON:?Set the device registry JSON}
+      MODEL_REGISTRY_JSON: ${MODEL_REGISTRY_JSON:?Set the approved model registry JSON}
+      SAFETY_POLICY_JSON: ${SAFETY_POLICY_JSON:?Set the approved facility safety policy JSON}
+      TELEMETRY_MAX_AGE_SECONDS: ${TELEMETRY_MAX_AGE_SECONDS:-30}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-6000}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    stop_grace_period: 15s
+    restart: unless-stopped
+  proxy:
+    image: caddy:2-alpine
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Set the service DNS name}
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+volumes:
+  caddy-data:
+  caddy-config:

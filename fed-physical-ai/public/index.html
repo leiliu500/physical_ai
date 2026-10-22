@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#101f2a" />
+    <meta
+      name="description"
+      content="Authenticated Physical AI operations, device telemetry, evidence reviews and execution accountability."
+    />
+    <title>Reserve | Physical AI Operations</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./operations.css" />
+    <script type="module" src="./client/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to main content</a>
+    <aside class="sidebar" aria-label="Application navigation">
+      <a class="brand" href="#overview"
+        ><span class="brand-mark">R↗</span
+        ><span>RESERVE<small>PHYSICAL AI OPERATIONS</small></span></a
+      >
+      <div class="workspace-label">OPERATIONS WORKSPACE</div>
+      <nav aria-label="Operations views">
+        <a href="#overview" data-view="overview"><span aria-hidden="true">◫</span>Overview</a
+        ><a href="#fleet" data-view="fleet"><span aria-hidden="true">⬡</span>Fleet operations</a
+        ><a href="#health" data-view="health"
+          ><span aria-hidden="true">⌁</span>Asset & facility health</a
+        ><a href="#inspections" data-view="inspections"
+          ><span aria-hidden="true">⌗</span>Inspections</a
+        ><a href="#reviews" data-view="reviews"
+          ><span aria-hidden="true">☷</span>Decision workspace</a
+        ><a href="#assurance" data-view="assurance"
+          ><span aria-hidden="true">◇</span>Platform assurance</a
+        ><a href="#audit" data-view="audit"><span aria-hidden="true">≡</span>Audit ledger</a>
+      </nav>
+      <div class="sidebar-note">
+        <strong>Accountable execution</strong>
+        <p>Signed observations.<br />Authenticated decisions.<br />Confirmed physical outcomes.</p>
+      </div>
+    </aside>
+    <div class="shell">
+      <header class="topbar">
+        <div class="facility">
+          <span class="facility-icon" aria-hidden="true">▥</span
+          ><span
+            ><strong id="facility-name">Facility connection</strong
+            ><small id="service-mode">Production control plane · v2.0</small></span
+          >
+        </div>
+        <div class="header-actions">
+          <span class="connection" id="connection-label">Connecting</span
+          ><span id="identity">Organization access</span
+          ><button id="sign-out" class="button" data-action="logout" hidden>Sign out</button
+          ><button id="inhibit-button" class="button danger" data-action="inhibit" disabled>
+            Inhibit dispatch
+          </button>
+        </div>
+      </header>
+      <div id="service-notice" class="service-notice" role="status">
+        Establishing an authenticated service connection.
+      </div>
+      <main id="main" tabindex="-1"></main>
+      <footer>
+        <span>Device observations and execution results require verified signatures.</span
+        ><span>Independent engineering project · No Federal Reserve affiliation</span>
+      </footer>
+    </div>
+    <dialog id="action-dialog" aria-labelledby="dialog-title">
+      <form id="action-form">
+        <h2 id="dialog-title">Authorize operation</h2>
+        <div id="dialog-fields"></div>
+        <p class="dialog-note">
+          The server rechecks authorization, device freshness, capabilities and interlocks before
+          transmitting a command. Physical completion must be acknowledged by the execution gateway.
+        </p>
+        <div class="dialog-actions">
+          <button type="button" class="button" data-action="cancel-dialog">Cancel</button
+          ><button type="submit" class="button primary">Submit request</button>
+        </div>
+      </form>
+    </dialog>
+    <div id="notification" class="notification" role="status" aria-live="polite" hidden></div>
+    <noscript
+      >This operations console requires JavaScript and its authenticated control service.</noscript
+    >
+  </body>
+</html>
